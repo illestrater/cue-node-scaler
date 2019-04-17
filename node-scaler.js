@@ -320,5 +320,5 @@ Vault.read('secret/env').then(async vault => {
     cert: fs.readFileSync(`${ ENV.CERT_LOCATION }/fullchain.pem`, 'utf8')
   };
   const server = https.createServer(options, app);
-  server.listen(1234);
+  server.listen(2345);
 });
