@@ -5,6 +5,10 @@ const axios = require('axios');
 const request = require('request');
 const winston = require('winston');
 const jwt = require('jsonwebtoken');
+const express = require('express');
+const https = require('https');
+const cors = require('cors');
+const bodyParser = require('body-parser');
 
 const ENV = process.env;
 
@@ -44,22 +48,40 @@ Vault.read('secret/env').then(async vault => {
   axios.defaults.headers.common.Authorization = secrets.digitalocean_key;
 
   const MINIMUM_DROPLETS = 1;
-  const HEALTH_CPU_THRESHOLD = 80;
+  const HEALTH_CPU_THRESHOLD_UPPER = 80;
+  const HEALTH_CPU_THRESHOLD_LOWER = 60;
 
   let initializing = false;
   let initialized = true;
+  let destroying = false;
   let clearInitialization = false;
+  let deploy = true;
+  let deploying = false;
   let availableDroplets = [];
   let serverPromises = [];
 
-  function updateLoadBalancers(remove) {
+  function deleteDroplet(droplet) {
+    api.delete(`v2/droplets/${ droplet }`)
+    .then((res) => { console.log('DROPLET DELETED', droplet); })
+    .catch(err => {});
+  }
+
+  function updateLoadBalancers(remove, ids) {
     const dropletIDs = [];
     availableDroplets.forEach((droplet) => {
       dropletIDs.push(droplet.id);
     });
 
+    let destroy;
     if (remove) {
-      dropletIDs.pop();
+      destroy = dropletIDs.pop();
+    } else if (ids) {
+      ids.forEach(id => {
+        const index = dropletIDs.indexOf(id);
+        if (index > -1) {
+          dropletIDs.splice(index, 1);
+        }
+      });
     }
 
     console.log('DROPLET IDS', dropletIDs);
@@ -87,12 +109,32 @@ Vault.read('secret/env').then(async vault => {
       },
       sticky_sessions: {},
       droplet_ids: dropletIDs
-    }).then(() => { console.log('UPDATED LOAD BALANCER'); })
-    .catch(err => { console.log('LOAD BALANCER ERROR', err); });
+    }).then(() => {
+      console.log('UPDATED LOAD BALANCER');
+      if (remove) {
+        console.log('DELETING DROPLET SOON', destroy);
+        setTimeout(() => {
+          destroying = false;
+          deleteDroplet(destroy);
+        }, 60000);
+      } else if (ids) {
+        console.log('DELETING DROPLETS SOON', ids);
+        setTimeout(() => {
+          destroying = false;
+          deploying = false;
+          ids.forEach(id => {
+            deleteDroplet(id);
+          });
+        }, 60000);
+      }
+    })
+    .catch(err => {
+      destroying = false;
+      console.log('LOAD BALANCER ERROR', err);
+    });
   }
 
   function checkNewDroplet(droplet) {
-    initializing = false;
     initialized = false;
     if (clearInitialization) {
       clearInterval(clearInitialization);
@@ -148,7 +190,7 @@ Vault.read('secret/env').then(async vault => {
       ssh_keys: ['20298220', '20398405'],
       backups: 'false',
       ipv6: false,
-      user_data: '#cloud-config\nruncmd:\n - git -C /root/cue-server pull origin scaling\n - /usr/bin/yarn --cwd /root/cue-server\n - /root/.nvm/versions/node/v8.15.1/bin/forever start /root/cue-server/server/server.js',
+      user_data: '#cloud-config\nruncmd:\n - git -C /root/cue-server pull origin master\n - /usr/bin/yarn --cwd /root/cue-server\n - /root/.nvm/versions/node/v8.15.1/bin/forever start /root/cue-server/server/server.js',
       private_networking: null,
       monitoring: false,
       volumes: null,
@@ -163,14 +205,8 @@ Vault.read('secret/env').then(async vault => {
     });
   }
 
-  function deleteDroplet(droplet) {
-    api.delete(`v2/droplets/${ droplet }`)
-    .then((res) => { console.log('DROPLET DELETED', droplet); })
-    .catch(err => {});
-  }
-
   // api.get('v2/images?private=true').then((res) => console.log(res.data));
-  logger.info(`INITIALIZING TRANSCODER ROTATOR WITH: ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
+  logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
   // Load monitor
   setInterval(() => {
@@ -211,24 +247,75 @@ Vault.read('secret/env').then(async vault => {
               let availableCount = 0;
               let totalCPU = 0;
               values.forEach(node => {
-                if (!node.error && node.usage && node.usage.cpu) {
+                if (node && !node.error && node.usage && node.usage.cpu) {
                   totalCPU += node.usage.cpu;
                   availableCount++;
                 }
               });
 
-              const averageCPU = totalCPU / availableCount;
-              console.log(averageCPU, totalCPU, availableCount);
-              if (averageCPU > HEALTH_CPU_THRESHOLD && !initializing) {
-                console.log('starting new droplet');
-                createDroplet();
+              if (deploying && !initializing && !destroying) {
+                destroying = true;
+                updateLoadBalancers(false, deploying);
+              }
+
+              // SERVER DEPLOYMENT
+              if (deploy) {
+                deploy = false;
+                deploying = [];
+                availableDroplets.forEach(droplet => deploying.push(droplet.id));
+                for (let i = 0; i < values.length; i++) {
+                  createDroplet();
+                }
+              }
+
+              if (!deploying) {
+                const averageCPU = totalCPU / availableCount;
+                console.log(averageCPU, totalCPU, availableCount);
+
+                // UPSCALE
+                if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS) && !initializing) {
+                  createDroplet();
+                }
+
+                // DOWNSCALE
+                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
+                  destroying = true;
+                  updateLoadBalancers(true, null);
+                }
               }
 
               serverPromises = [];
-            });
+            }).catch(err => { console.log('got unhandled', err); });
           }
         }
       })
       .catch(err => { console.log('GOT ERROR', err); });
   }, 10000);
+
+  const app = express();
+  app.use(cors());
+  app.use(bodyParser.json());
+
+  function verify(token, res, callback) {
+    try {
+        const verified = jwt.verify(token.jwt, SERVICE_KEY);
+        return callback(verified);
+    } catch (err) {
+        return res.status(500).json('Authorization error');
+    }
+  }
+
+  app.get('/deploy', (req, res) => {
+    verify(req.body, res, () => {
+      deploy = true;
+      res.json('DEPLOYING');
+    });
+  });
+
+  const options = {
+    key:  fs.readFileSync(`${ ENV.CERT_LOCATION }/privkey.pem`, 'utf8'),
+    cert: fs.readFileSync(`${ ENV.CERT_LOCATION }/fullchain.pem`, 'utf8')
+  };
+  const server = https.createServer(options, app);
+  server.listen(1234);
 });
