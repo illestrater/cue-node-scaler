@@ -205,7 +205,7 @@ Vault.read('secret/env').then(async vault => {
     });
   }
 
-  api.get('v2/images?private=true').then((res) => console.log(res.data));
+  // api.get('v2/images?private=true').then((res) => console.log(res.data));
   logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
   // Load monitor
