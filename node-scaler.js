@@ -119,6 +119,7 @@ Vault.read('secret/env').then(async vault => {
         }, 60000);
       } else if (ids) {
         console.log('DELETING DROPLETS SOON', ids);
+        logger.info(`FULLY DEPLOYED ${ new Date() }`);
         setTimeout(() => {
           destroying = false;
           deploying = false;
@@ -159,7 +160,7 @@ Vault.read('secret/env').then(async vault => {
               updateLoadBalancers();
               clearInitialization = setTimeout(() => {
                 initializing = false;
-              }, 60000 * 5);
+              }, 60000 * 4);
               console.log('CLEARING CHECKER');
               clearInterval(initializationChecker);
             }
@@ -256,6 +257,7 @@ Vault.read('secret/env').then(async vault => {
               if (deploying && !initializing && !destroying) {
                 destroying = true;
                 updateLoadBalancers(false, deploying);
+                logger.info(`REDIRECTED TRAFFIC ${ new Date() }`);
               }
 
               // SERVER DEPLOYMENT
