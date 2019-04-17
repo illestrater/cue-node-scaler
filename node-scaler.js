@@ -186,7 +186,7 @@ Vault.read('secret/env').then(async vault => {
       name: 'cue-node',
       region: 'sfo2',
       size: 's-1vcpu-1gb',
-      image: '46011811',
+      image: '46042937',
       ssh_keys: ['20298220', '20398405'],
       backups: 'false',
       ipv6: false,
@@ -205,7 +205,7 @@ Vault.read('secret/env').then(async vault => {
     });
   }
 
-  // api.get('v2/images?private=true').then((res) => console.log(res.data));
+  api.get('v2/images?private=true').then((res) => console.log(res.data));
   logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
   // Load monitor
@@ -263,6 +263,7 @@ Vault.read('secret/env').then(async vault => {
                 deploy = false;
                 deploying = [];
                 availableDroplets.forEach(droplet => deploying.push(droplet.id));
+                logger.info(`DEPLOYING ${ new Date() }`);
                 for (let i = 0; i < values.length; i++) {
                   createDroplet();
                 }
@@ -274,11 +275,13 @@ Vault.read('secret/env').then(async vault => {
 
                 // UPSCALE
                 if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS) && !initializing) {
+                  logger.info(`UPSCALING ${ new Date() }`);
                   createDroplet();
                 }
 
                 // DOWNSCALE
                 if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
+                  logger.info(`DOWNSCALING ${ new Date() }`);
                   destroying = true;
                   updateLoadBalancers(true, null);
                 }
