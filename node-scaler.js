@@ -308,7 +308,7 @@ Vault.read('secret/env').then(async vault => {
     }
   }
 
-  app.get('/deploy', (req, res) => {
+  app.post('/deploy', (req, res) => {
     verify(req.body, res, () => {
       deploy = true;
       res.json('DEPLOYING');
