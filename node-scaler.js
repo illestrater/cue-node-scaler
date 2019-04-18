@@ -96,7 +96,7 @@ Vault.read('secret/env').then(async vault => {
           entry_port: 443,
           target_protocol: 'http',
           target_port: 1111,
-          certificate_id: '9a06069b-ff21-4378-967b-90e7a6515ce9'
+          certificate_id: '95615b86-03ce-4085-aba9-4fc281921d74'
         }
       ],
       health_check: {
@@ -206,6 +206,7 @@ Vault.read('secret/env').then(async vault => {
     });
   }
 
+  // api.get('v2/certificates').then((res) => console.log(res.data));
   // api.get('v2/images?private=true').then((res) => console.log(res.data));
   logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
