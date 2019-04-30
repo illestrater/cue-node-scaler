@@ -95,7 +95,7 @@ Vault.read('secret/env').then(async vault => {
           entry_protocol: 'https',
           entry_port: 443,
           target_protocol: 'http',
-          target_port: 1111,
+          target_port: 80,
           certificate_id: '95615b86-03ce-4085-aba9-4fc281921d74'
         }
       ],
