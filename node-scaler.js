@@ -191,7 +191,7 @@ Vault.read('secret/env').then(async vault => {
       ssh_keys: ['20298220', '20398405'],
       backups: 'false',
       ipv6: false,
-      user_data: '#cloud-config\nruncmd:\n - /etc/init.d/nginx start\n - git -C /root/cue-server pull origin master\n - /usr/bin/yarn --cwd /root/cue-server\n - /root/.nvm/versions/node/v8.15.1/bin/forever start /root/cue-server/server/server.js',
+      user_data: '#cloud-config\nruncmd:\n - /etc/init.d/nginx start\n - git -C /root/cue-server pull origin master\n - mkdir /root/cue-server/images\n - /usr/bin/yarn --cwd /root/cue-server\n - /root/.nvm/versions/node/v8.15.1/bin/forever start /root/cue-server/server/server.js',
       private_networking: null,
       monitoring: false,
       volumes: null,
