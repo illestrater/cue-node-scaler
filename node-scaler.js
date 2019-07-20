@@ -187,7 +187,7 @@ Vault.read('secret/env').then(async vault => {
       name: 'cue-node',
       region: 'sfo2',
       size: 's-1vcpu-1gb',
-      image: '46855879',
+      image: '49860468',
       ssh_keys: ['20298220', '20398405'],
       backups: 'false',
       ipv6: false,
