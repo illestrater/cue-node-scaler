@@ -211,117 +211,117 @@ Vault.read('secret/env').then(async vault => {
   logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
   // Load monitor
-  setInterval(() => {
-      api.get('v2/droplets?tag_name=nodejs')
-      .then(res => {
-        if (res.data) {
-          if (res.data.id !== 'service_unavailable') {
-            availableDroplets = res.data.droplets;
-          }
+  // setInterval(() => {
+  //     api.get('v2/droplets?tag_name=nodejs')
+  //     .then(res => {
+  //       if (res.data) {
+  //         if (res.data.id !== 'service_unavailable') {
+  //           availableDroplets = res.data.droplets;
+  //         }
 
-          // Run check one at a time, and while not initializing new droplet
-          if (serverPromises.length === 0 && initialized) {
-            // Gather health of all droplets
-            for (let i = 0; i < availableDroplets.length; i++) {
-              if (availableDroplets[i].networks.v4[0]) {
-                const ip = availableDroplets[i].networks.v4[0].ip_address;
-                serverPromises.push(
-                  new Promise((resolve, reject) => {
-                    request({
-                      url: `http://${ ip }:1111/api/health`,
-                      method: 'POST',
-                      json: { jwt: jwt.sign({}, SERVICE_KEY) }
-                    }, (err, response, body) => {
-                      if (body) {
-                        body.droplet = availableDroplets[i].id;
-                        body.ip = ip;
-                        resolve(body);
-                      } else {
-                        reject(err);
-                      }
-                    });
-                  }).catch(err => {})
-                );
-              }
-            }
+  //         // Run check one at a time, and while not initializing new droplet
+  //         if (serverPromises.length === 0 && initialized) {
+  //           // Gather health of all droplets
+  //           for (let i = 0; i < availableDroplets.length; i++) {
+  //             if (availableDroplets[i].networks.v4[0]) {
+  //               const ip = availableDroplets[i].networks.v4[0].ip_address;
+  //               serverPromises.push(
+  //                 new Promise((resolve, reject) => {
+  //                   request({
+  //                     url: `http://${ ip }:1111/api/health`,
+  //                     method: 'POST',
+  //                     json: { jwt: jwt.sign({}, SERVICE_KEY) }
+  //                   }, (err, response, body) => {
+  //                     if (body) {
+  //                       body.droplet = availableDroplets[i].id;
+  //                       body.ip = ip;
+  //                       resolve(body);
+  //                     } else {
+  //                       reject(err);
+  //                     }
+  //                   });
+  //                 }).catch(err => {})
+  //               );
+  //             }
+  //           }
 
-            Promise.all(serverPromises).then((values) => {
-              let availableCount = 0;
-              let totalCPU = 0;
-              values.forEach(node => {
-                if (node && !node.error && node.usage && node.usage.cpu) {
-                  totalCPU += node.usage.cpu;
-                  availableCount++;
-                }
-              });
+  //           Promise.all(serverPromises).then((values) => {
+  //             let availableCount = 0;
+  //             let totalCPU = 0;
+  //             values.forEach(node => {
+  //               if (node && !node.error && node.usage && node.usage.cpu) {
+  //                 totalCPU += node.usage.cpu;
+  //                 availableCount++;
+  //               }
+  //             });
 
-              if (deploying && !initializing && !destroying) {
-                destroying = true;
-                updateLoadBalancers(false, deploying);
-                logger.info(`REDIRECTED TRAFFIC ${ new Date() }`);
-              }
+  //             if (deploying && !initializing && !destroying) {
+  //               destroying = true;
+  //               updateLoadBalancers(false, deploying);
+  //               logger.info(`REDIRECTED TRAFFIC ${ new Date() }`);
+  //             }
 
-              // SERVER DEPLOYMENT
-              if (deploy) {
-                deploy = false;
-                deploying = [];
-                availableDroplets.forEach(droplet => deploying.push(droplet.id));
-                logger.info(`DEPLOYING ${ new Date() }`);
-                for (let i = 0; i < values.length; i++) {
-                  createDroplet();
-                }
-              }
+  //             // SERVER DEPLOYMENT
+  //             if (deploy) {
+  //               deploy = false;
+  //               deploying = [];
+  //               availableDroplets.forEach(droplet => deploying.push(droplet.id));
+  //               logger.info(`DEPLOYING ${ new Date() }`);
+  //               for (let i = 0; i < values.length; i++) {
+  //                 createDroplet();
+  //               }
+  //             }
 
-              if (!deploying) {
-                const averageCPU = totalCPU / availableCount;
-                console.log(averageCPU, totalCPU, availableCount);
+  //             if (!deploying) {
+  //               const averageCPU = totalCPU / availableCount;
+  //               console.log(averageCPU, totalCPU, availableCount);
 
-                // UPSCALE
-                if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS) && !initializing) {
-                  logger.info(`UPSCALING ${ new Date() }`);
-                  createDroplet();
-                }
+  //               // UPSCALE
+  //               if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS) && !initializing) {
+  //                 logger.info(`UPSCALING ${ new Date() }`);
+  //                 createDroplet();
+  //               }
 
-                // DOWNSCALE
-                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
-                  logger.info(`DOWNSCALING ${ new Date() }`);
-                  destroying = true;
-                  updateLoadBalancers(true, null);
-                }
-              }
+  //               // DOWNSCALE
+  //               if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
+  //                 logger.info(`DOWNSCALING ${ new Date() }`);
+  //                 destroying = true;
+  //                 updateLoadBalancers(true, null);
+  //               }
+  //             }
 
-              serverPromises = [];
-            }).catch(err => { console.log('got unhandled', err); });
-          }
-        }
-      })
-      .catch(err => { console.log('GOT ERROR', err); });
-  }, 10000);
+  //             serverPromises = [];
+  //           }).catch(err => { console.log('got unhandled', err); });
+  //         }
+  //       }
+  //     })
+  //     .catch(err => { console.log('GOT ERROR', err); });
+  // }, 10000);
 
-  const app = express();
-  app.use(cors());
-  app.use(bodyParser.json());
+  // const app = express();
+  // app.use(cors());
+  // app.use(bodyParser.json());
 
-  function verify(token, res, callback) {
-    try {
-        const verified = jwt.verify(token.jwt, SERVICE_KEY);
-        return callback(verified);
-    } catch (err) {
-        return res.status(500).json('Authorization error');
-    }
-  }
+  // function verify(token, res, callback) {
+  //   try {
+  //       const verified = jwt.verify(token.jwt, SERVICE_KEY);
+  //       return callback(verified);
+  //   } catch (err) {
+  //       return res.status(500).json('Authorization error');
+  //   }
+  // }
 
-  app.post('/deploy', (req, res) => {
-    verify(req.body, res, () => {
-      deploy = true;
-      res.json('DEPLOYING');
-    });
-  });
+  // app.post('/deploy', (req, res) => {
+  //   verify(req.body, res, () => {
+  //     deploy = true;
+  //     res.json('DEPLOYING');
+  //   });
+  // });
 
-  const options = {
-    key:  fs.readFileSync(`${ ENV.CERT_LOCATION }/privkey.pem`, 'utf8'),
-    cert: fs.readFileSync(`${ ENV.CERT_LOCATION }/fullchain.pem`, 'utf8')
-  };
-  const server = https.createServer(options, app);
-  server.listen(2345);
+  // const options = {
+  //   key:  fs.readFileSync(`${ ENV.CERT_LOCATION }/privkey.pem`, 'utf8'),
+  //   cert: fs.readFileSync(`${ ENV.CERT_LOCATION }/fullchain.pem`, 'utf8')
+  // };
+  // const server = https.createServer(options, app);
+  // server.listen(2345);
 });
