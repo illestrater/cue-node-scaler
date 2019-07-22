@@ -107,6 +107,7 @@ Vault.read('secret/env').then(async vault => {
         healthy_threshold: 5,
         unhealthy_threshold: 3
       },
+      enable_proxy_protocol: 'true',
       sticky_sessions: {},
       droplet_ids: dropletIDs
     }).then(() => {
