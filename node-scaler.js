@@ -209,7 +209,7 @@ Vault.read('secret/env').then(async vault => {
 
   // api.get('v2/certificates').then((res) => console.log(res.data));
   // api.get('v2/images?private=true').then((res) => console.log(res.data));
-  logger.info(`INITIALIZING TRANSCODER ROTATOR WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
+  logger.info(`INITIALIZING NODE SCALER WITH ${ MINIMUM_DROPLETS } MINIMUM DROPLETS`);
 
   // Load monitor
   setInterval(() => {
@@ -284,7 +284,7 @@ Vault.read('secret/env').then(async vault => {
                 }
 
                 // DOWNSCALE
-                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
+                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !initializing && !destroying) {
                   logger.info(`DOWNSCALING ${ new Date() }`);
                   destroying = true;
                   updateLoadBalancers(true, null);
