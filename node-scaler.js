@@ -250,7 +250,7 @@ Vault.read('secret/env').then(async vault => {
               let availableCount = 0;
               let totalCPU = 0;
               values.forEach(node => {
-                if (node && !node.error && node.usage && node.usage.cpu) {
+                if (node && !node.error && node.usage) {
                   totalCPU += node.usage.cpu;
                   availableCount++;
                 }
@@ -273,18 +273,18 @@ Vault.read('secret/env').then(async vault => {
                 }
               }
 
-              if (!deploying) {
+              if (!deploying && !initializing) {
                 const averageCPU = totalCPU / availableCount;
                 console.log(averageCPU, totalCPU, availableCount);
 
                 // UPSCALE
-                if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS) && !initializing) {
+                if ((averageCPU > HEALTH_CPU_THRESHOLD_UPPER || availableDroplets.length < MINIMUM_DROPLETS)) {
                   logger.info(`UPSCALING ${ new Date() }`);
                   createDroplet();
                 }
 
                 // DOWNSCALE
-                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !initializing && !destroying) {
+                if (averageCPU < HEALTH_CPU_THRESHOLD_LOWER && availableDroplets.length > MINIMUM_DROPLETS && !destroying) {
                   logger.info(`DOWNSCALING ${ new Date() }`);
                   destroying = true;
                   updateLoadBalancers(true, null);
